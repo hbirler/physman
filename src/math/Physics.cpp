@@ -85,7 +85,7 @@ void Physics::step(num h) {
                 J_dt.add(i, c.components[j], localJ_dt[j]);
             }
         }
-        num ks = 100.0;
+        num ks = 500.0;
         num kd = 10.0;
         auto b = -J_dt.dot(scope.vs) - J.dot(W * Q) - ks * C - kd * C_dt;
         auto lamb = Algorithm::solve(b, [&](const Vec& lamb) {

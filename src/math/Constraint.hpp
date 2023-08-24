@@ -32,6 +32,8 @@ class Constraint {
     static std::unique_ptr<Constraint> getFixed(num x, num y, num z);
     /// Sphere collision
     static std::unique_ptr<Constraint> getSphereCollision(num radius1, num radius2);
+    /// Axis collision
+    static std::unique_ptr<Constraint> getAxisCollision(num distance);
 
     template <unsigned Components>
     static auto makeComponents() {

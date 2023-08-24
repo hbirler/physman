@@ -4,8 +4,9 @@ project(physman)
 set(CMAKE_CXX_STANDARD 23)
 
 add_executable(main
-        src/main.cpp
+        src/Game.cpp
         src/Js.cpp
+        src/main.cpp
         src/math/Val.cpp
         src/math/Algorithm.cpp
         src/math/Constraint.cpp

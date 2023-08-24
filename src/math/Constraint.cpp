@@ -35,6 +35,15 @@ unique_ptr<Constraint> math::Constraint::getSphereCollision(num radius1, num rad
     return makeConstraint<6>(dif);
 }
 //---------------------------------------------------------------------------
+unique_ptr<Constraint> math::Constraint::getAxisCollision(num expectedDist)
+/// Sphere collision
+{
+    auto [t, x1, v1] = makeComponents<1>();
+    auto dist = x1 - expectedDist;
+    auto dif = val::If{[](num v) { return v < -epsilon; }, dist, dist * dist, val::Zero{}};
+    return makeConstraint<1>(dif);
+}
+//---------------------------------------------------------------------------
 ValScope Constraint::map(const ValScope& source, std::vector<unsigned> components)
 // Extract specific components from larger valscope
 {
