@@ -15,5 +15,8 @@
   }, {
     "name" : "tl-function-ref",
     "version>=" : "1.0.0#4"
+  }, {
+    "name" : "entt",
+    "version>=" : "3.12.2"
   } ]
 }

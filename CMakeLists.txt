@@ -23,6 +23,9 @@ target_link_libraries(main PRIVATE raylib)
 find_package(Catch2 CONFIG REQUIRED)
 target_link_libraries(main PRIVATE Catch2::Catch2)
 
+find_package(EnTT CONFIG REQUIRED)
+target_link_libraries(main PRIVATE EnTT::EnTT)
+
 target_include_directories(main PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_options(main PRIVATE -Wno-unknown-attributes -Wno-unqualified-std-cast-call)
 

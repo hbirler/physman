@@ -6,14 +6,15 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace physman::math {
 //---------------------------------------------------------------------------
-std::unique_ptr<Force> Force::getGravity(num g) {
-    return makeForce([g](const ValScope& state) {
-        return Vec(state.xs.size(), g);
+const Force* Force::getConstant() {
+    static auto myForce = makeForce(integral_constant<unsigned, 3>{}, [](const ValScope& state, num x, num y, num z) {
+        return Vec{x, y, z};
     });
+    return &myForce;
 }
 //---------------------------------------------------------------------------
-std::unique_ptr<Force> Force::getSpring3(num ks, num kd, num r) {
-    return makeForce([ks, kd, r](const ValScope& state) -> Vec {
+const Force* Force::getSpring3() {
+    static auto myForce = makeForce(integral_constant<unsigned, 3>{}, [](const ValScope& state, num ks, num kd, num r) -> Vec {
         assert(state.xs.size() == 6);
 
         auto x0 = state.xs.slice(0, 3);
@@ -30,6 +31,7 @@ std::unique_ptr<Force> Force::getSpring3(num ks, num kd, num r) {
 
         return Vec::concat(f, -f);
     });
+    return &myForce;
 }
 //---------------------------------------------------------------------------
 }

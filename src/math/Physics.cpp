@@ -13,12 +13,23 @@ Physics::Physics(const Vec& xs, const Vec& vs, Vec ms, num t) : state(Vec::conca
 }
 Physics::~Physics() noexcept = default;
 //---------------------------------------------------------------------------
-void Physics::addConstraint(MappedConstraint constraint) {
-    constraints.push_back(move(constraint));
+void Physics::addConstraint(const Constraint* constraint, std::span<const unsigned> cs, std::span<const num> ps) {
+    assert(constraint->numComponents() == cs.size());
+    assert(constraint->numParameters() == ps.size());
+    auto& myConstraint = constraints[constraint];
+    myConstraint.push_back({static_cast<unsigned>(components.size()), static_cast<unsigned>(cs.size()), static_cast<unsigned>(params.size()), static_cast<unsigned>(ps.size())});
+    components.insert(components.end(), cs.begin(), cs.end());
+    params.insert(params.end(), ps.begin(), ps.end());
+    numConstraints++;
 }
 //---------------------------------------------------------------------------
-void Physics::addForce(MappedForce force) {
-    forces.push_back(move(force));
+void Physics::addForce(const Force* force, std::span<const unsigned> cs, std::span<const num> ps) {
+    assert(force->numParameters() == ps.size());
+    auto& myForce = forces[force];
+    myForce.push_back({static_cast<unsigned>(components.size()), static_cast<unsigned>(cs.size()), static_cast<unsigned>(params.size()), static_cast<unsigned>(ps.size())});
+    components.insert(components.end(), cs.begin(), cs.end());
+    params.insert(params.end(), ps.begin(), ps.end());
+    numForces++;
 }
 //---------------------------------------------------------------------------
 struct SparseMatrix {
@@ -55,34 +66,45 @@ void Physics::step(num h) {
         ValScope scope;
         scope.xs = state.slice(0, state.size() / 2);
         scope.vs = state.slice(state.size() / 2, state.size() / 2);
+        scope.ps = params;
         scope.t = t;
 
         Vec W = 1.0 / ms;
 
         Vec Q(scope.xs.size());
-        for (auto& f : forces) {
-            auto mapped = Constraint::map(scope, f.components);
-            auto forceVals = f.force->computeQ(mapped);
-            for (size_t i = 0; i < f.components.size(); i++)
-                Q[f.components[i]] += forceVals[i];
+        for (auto& [f, mappings] : forces) {
+            for (auto& m : mappings) {
+                auto fcomponents = span{components}.subspan(m.componentOffset, m.componentCount);
+                auto mapped = Constraint::map(scope, fcomponents, m.paramOffset, m.paramCount);
+                auto forceVals = f->computeQ(mapped);
+                for (size_t i = 0; i < fcomponents.size(); i++)
+                    Q[fcomponents[i]] += forceVals[i];
+            }
         }
 
-        Vec C(constraints.size());
-        Vec C_dt(constraints.size());
-        SparseMatrix J(constraints.size(), scope.xs.size());
-        SparseMatrix J_dt(constraints.size(), scope.xs.size());
-        for (size_t i = 0; i < constraints.size(); i++) {
-            auto& c = constraints[i];
-            auto mapped = Constraint::map(scope, c.components);
-            auto localC = c.constraint->computeC(mapped);
-            auto localC_dt = c.constraint->computeC_dt(mapped);
-            auto localJ = c.constraint->computeJacobian(mapped);
-            auto localJ_dt = c.constraint->computeJacobian_dt(mapped);
-            C[i] = localC;
-            C_dt[i] = localC_dt;
-            for (size_t j = 0; j < c.components.size(); j++) {
-                J.add(i, c.components[j], localJ[j]);
-                J_dt.add(i, c.components[j], localJ_dt[j]);
+        Vec C(numConstraints);
+        Vec C_dt(numConstraints);
+        SparseMatrix J(numConstraints, scope.xs.size());
+        SparseMatrix J_dt(numConstraints, scope.xs.size());
+        {
+            size_t i = 0;
+            for (auto& [c, mappings] : constraints) {
+                for (auto& m : mappings) {
+                    auto ccomponents = span{components}.subspan(m.componentOffset, m.componentCount);
+                    auto mapped = Constraint::map(scope, ccomponents, m.paramOffset, m.paramCount);
+
+                    auto localC = c->computeC(mapped);
+                    auto localC_dt = c->computeC_dt(mapped);
+                    auto localJ = c->computeJacobian(mapped);
+                    auto localJ_dt = c->computeJacobian_dt(mapped);
+                    C[i] = localC;
+                    C_dt[i] = localC_dt;
+                    for (size_t j = 0; j < ccomponents.size(); j++) {
+                        J.add(i, ccomponents[j], localJ[j]);
+                        J_dt.add(i, ccomponents[j], localJ_dt[j]);
+                    }
+                    i++;
+                }
             }
         }
         num ks = 500.0;

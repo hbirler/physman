@@ -16,6 +16,8 @@ class Constraint {
     virtual ~Constraint() = default;
     /// Get the number of components
     virtual unsigned numComponents() const = 0;
+    /// Get the number of parameters
+    virtual unsigned numParameters() const = 0;
     /// Get the result of the constraint function
     virtual num computeC(const ValScope& state) const = 0;
     /// Get the result of the constraint function's time derivative
@@ -27,29 +29,35 @@ class Constraint {
     virtual Vec computeJacobian_dt(const ValScope& state) const = 0;
 
     /// The distance between two Vec3s must be "distance"
-    static std::unique_ptr<Constraint> getDistance(num distance);
+    static const Constraint* getDistance1();
+    /// The distance between two Vec3s must be "distance"
+    static const Constraint* getDistance2();
     /// A vec3 must be fixed at a certain point
-    static std::unique_ptr<Constraint> getFixed(num x, num y, num z);
+    static const Constraint* getFixed();
     /// Sphere collision
-    static std::unique_ptr<Constraint> getSphereCollision(num radius1, num radius2);
+    static const Constraint* getSphereCollision1();
+    /// Sphere collision
+    static const Constraint* getSphereCollision2();
     /// Axis collision
-    static std::unique_ptr<Constraint> getAxisCollision(num distance);
+    static const Constraint* getAxisCollision1();
 
-    template <unsigned Components>
+    template <unsigned Components, unsigned Params>
     static auto makeComponents() {
-        return ([&]<size_t... Is>(std::index_sequence<Is...>) {
-            return std::make_tuple(val::Time{}, val::Pos<Is>{}..., val::Vel<Is>{}...);
-        })(std::make_index_sequence<Components>{});
+        return ([&]<size_t... Is, size_t... Is2>(std::index_sequence<Is...>, std::index_sequence<Is2...>) {
+            return std::make_tuple(val::Time{}, val::Pos<Is>{}..., val::Vel<Is>{}..., val::Param<Is2>{}...);
+        })(std::make_index_sequence<Components>{}, std::make_index_sequence<Params>{});
     }
-    template <unsigned Vecs>
+    template <unsigned Vecs, unsigned Params>
     static auto makeVecComponents() {
-        return ([&]<size_t... Is>(std::index_sequence<Is...>) {
-            return std::make_tuple(val::Time{}, val::Vec3{val::Pos<Is * 3>{}, val::Pos<Is * 3 + 1>{}, val::Pos<Is * 3 + 2>{}}..., val::Vec3{val::Vel<Is * 3>{}, val::Vel<Is * 3 + 1>{}, val::Vel<Is * 3 + 2>{}}...);
-        })(std::make_index_sequence<Vecs>{});
+        return ([&]<size_t... Is, size_t... Is2>(std::index_sequence<Is...>, std::index_sequence<Is2...>) {
+            return std::make_tuple(val::Time{}, val::Vec3{val::Pos<Is * 3>{}, val::Pos<Is * 3 + 1>{}, val::Pos<Is * 3 + 2>{}}..., val::Vec3{val::Vel<Is * 3>{}, val::Vel<Is * 3 + 1>{}, val::Vel<Is * 3 + 2>{}}..., val::Param<Is2>{}...);
+        })(std::make_index_sequence<Vecs>{}, std::make_index_sequence<Params>{});
     }
 
-    template <unsigned Components>
     static auto makeConstraint(std::derived_from<val::Val> auto c) {
+        using T = decltype(c);
+        static constexpr unsigned Components = val::Val::numComponents<T>();
+        static constexpr unsigned Params = val::Val::numParams<T>();
         auto c_dt = c.deriveBy(val::Time{});
         auto [J, J_dt] = ([&]<size_t... Is>(std::index_sequence<Is...>) {
             return std::make_pair(
@@ -74,6 +82,7 @@ class Constraint {
                 : c(c), c_dt(c_dt), J(J), J_dt(J_dt) {}
 
             unsigned numComponents() const final { return Components; };
+            unsigned numParameters() const final { return Params; };
             num computeC(const ValScope& state) const final { return c.evaluate(state); }
             num computeC_dt(const ValScope& state) const final { return c_dt.evaluate(state); }
             Vec computeJacobian(const ValScope& state) const final {
@@ -91,11 +100,11 @@ class Constraint {
                 return result;
             }
         };
-        return std::make_unique<MyConstraint>(c, c_dt, J, J_dt);
+        return MyConstraint(c, c_dt, J, J_dt);
     }
 
     /// Extract specific components from larger valscope
-    static ValScope map(const ValScope& source, std::vector<unsigned> components);
+    static ValScope map(const ValScope& source, std::span<const unsigned> components, unsigned paramStart, unsigned paramCount);
 };
 //---------------------------------------------------------------------------
 }

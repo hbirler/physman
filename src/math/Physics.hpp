@@ -7,18 +7,20 @@
 namespace physman::math {
 //---------------------------------------------------------------------------
 class Physics {
-    public:
-    struct MappedConstraint {
-        std::unique_ptr<Constraint> constraint;
-        std::vector<unsigned> components;
+    struct Mapping {
+        unsigned componentOffset = 0;
+        unsigned componentCount = 0;
+        unsigned paramOffset = 0;
+        unsigned paramCount = 0;
     };
-    struct MappedForce {
-        std::unique_ptr<Force> force;
-        std::vector<unsigned> components;
-    };
+    std::vector<unsigned> components;
+    Vec params;
+    size_t numConstraints = 0;
+    size_t numForces = 0;
 
-    std::vector<MappedConstraint> constraints;
-    std::vector<MappedForce> forces;
+    std::unordered_map<const Constraint*, std::vector<Mapping>> constraints;
+    std::unordered_map<const Force*, std::vector<Mapping>> forces;
+
 
     public:
     /// xs and vs
@@ -28,8 +30,16 @@ class Physics {
 
     Physics(const Vec& xs, const Vec& vs, Vec ms, num t);
     ~Physics() noexcept;
-    void addConstraint(MappedConstraint constraint);
-    void addForce(MappedForce force);
+    template <size_t N1, size_t N2>
+    void addConstraint(const Constraint* constraint, const unsigned (&components)[N1], const num (&params)[N2]) {
+        return addConstraint(constraint, std::span<const unsigned>{components, components + N1}, std::span<const num>{params, params + N2});
+    }
+    void addConstraint(const Constraint* constraint, std::span<const unsigned> components, std::span<const num> params);
+    template <size_t N1, size_t N2>
+    void addForce(const Force* force, const unsigned (&components)[N1], const num (&params)[N2]) {
+        return addForce(force, std::span<const unsigned>{components, components + N1}, std::span<const num>{params, params + N2});
+    }
+    void addForce(const Force* force, std::span<const unsigned> components, std::span<const num> params);
 
     void step(num h);
 };

@@ -11,6 +11,7 @@ class Game {
     virtual ~Game() noexcept;
     virtual void update(num deltaTime, num totalTime) = 0;
     virtual void draw(num deltaTime, num totalTime) = 0;
+    virtual void init() = 0;
 
     virtual int getScreenWidth() = 0;
     virtual int getScreenHeight() = 0;

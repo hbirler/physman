@@ -30,6 +30,7 @@ class Vec : public std::vector<num> {
 
     public:
     using std::vector<num>::vector;
+    using std::vector<num>::push_back;
 
     Vec& operator+=(const Vec& v) { return applyImpl(std::plus{}, v); }
     Vec& operator-=(const Vec& v) { return applyImpl(std::minus{}, v); }

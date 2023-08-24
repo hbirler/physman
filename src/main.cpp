@@ -19,6 +19,7 @@ int main(int argc, const char* argv[])
         return result;
 
     currentGame = Game::makeGame();
+    currentGame->init();
     auto title = currentGame->getTitle();
     InitWindow(currentGame->getScreenWidth(), currentGame->getScreenHeight(), title.c_str());
 

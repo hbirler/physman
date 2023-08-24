@@ -6,45 +6,83 @@ using namespace std;
 //---------------------------------------------------------------------------
 namespace physman::math {
 //---------------------------------------------------------------------------
-unique_ptr<Constraint> math::Constraint::getDistance(num distance)
+const Constraint* math::Constraint::getDistance1()
 /// The distance between two Vec3s must be "distance"
 {
-    auto [t, x1, x2, v1, v2] = makeVecComponents<2>();
-    auto distVec = x1 - x2;
-    auto dist = (distVec * distVec).sum() - (distance * distance);
-    return makeConstraint<6>(dist);
+    static auto myConstraint = []() {
+        auto [t, x1, v1, ox, oy, oz, expectedDist] = makeVecComponents<1, 4>();
+        val::Vec3 x2{ox, oy, oz};
+        auto distVec = x1 - x2;
+        auto dist = (distVec * distVec).sum() - (expectedDist * expectedDist);
+        return makeConstraint(dist);
+    }();
+    return &myConstraint;
 }
 //---------------------------------------------------------------------------
-unique_ptr<Constraint> math::Constraint::getFixed(num x, num y, num z)
+const Constraint* math::Constraint::getDistance2()
 /// The distance between two Vec3s must be "distance"
 {
-    auto [t, x1, v1] = makeVecComponents<1>();
-    auto distVec = x1 - val::Vec3{val::Const{x}, val::Const{y}, val::Const{z}};
-    auto dist = (distVec * distVec).sum();
-    return makeConstraint<6>(dist);
+    static auto myConstraint = []() {
+        auto [t, x1, x2, v1, v2, expectedDist] = makeVecComponents<2, 1>();
+        auto distVec = x1 - x2;
+        auto dist = (distVec * distVec).sum() - (expectedDist * expectedDist);
+        return makeConstraint(dist);
+    }();
+    return &myConstraint;
 }
 //---------------------------------------------------------------------------
-unique_ptr<Constraint> math::Constraint::getSphereCollision(num radius1, num radius2)
+const Constraint* math::Constraint::getFixed()
+/// The distance between two Vec3s must be "distance"
+{
+    static auto myConstraint = []() {
+        auto [t, x1, v1, x, y, z] = makeVecComponents<1, 3>();
+        auto distVec = x1 - val::Vec3{x, y, z};
+        auto dist = (distVec * distVec).sum();
+        return makeConstraint(dist);
+    }();
+    return &myConstraint;
+}
+//---------------------------------------------------------------------------
+const Constraint* math::Constraint::getSphereCollision1()
 /// Sphere collision
 {
-    auto [t, x1, x2, v1, v2] = makeVecComponents<2>();
+    static auto myConstraint = []() {
+    auto [t, x1, v1, ox, oy, oz, expectedDist] = makeVecComponents<1, 4>();
+    val::Vec3 x2{ox, oy, oz};
     auto distVec = x1 - x2;
-    auto expectedDist = radius1 + radius2;
     auto dist = (distVec * distVec).sum() - (expectedDist * expectedDist);
     auto dif = val::If{[](num v) { return v < -epsilon; }, dist, dist, val::Zero{}};
-    return makeConstraint<6>(dif);
+    return makeConstraint(dif);
+    }();
+    return &myConstraint;
 }
 //---------------------------------------------------------------------------
-unique_ptr<Constraint> math::Constraint::getAxisCollision(num expectedDist)
+const Constraint* math::Constraint::getSphereCollision2()
 /// Sphere collision
 {
-    auto [t, x1, v1] = makeComponents<1>();
-    auto dist = x1 - expectedDist;
-    auto dif = val::If{[](num v) { return v < -epsilon; }, dist, dist * dist, val::Zero{}};
-    return makeConstraint<1>(dif);
+    static auto myConstraint = []() {
+        auto [t, x1, x2, v1, v2, expectedDist] = makeVecComponents<2, 1>();
+        auto distVec = x1 - x2;
+        auto dist = (distVec * distVec).sum() - (expectedDist * expectedDist);
+        auto dif = val::If{[](num v) { return v < -epsilon; }, dist, dist, val::Zero{}};
+        return makeConstraint(dif);
+    }();
+    return &myConstraint;
 }
 //---------------------------------------------------------------------------
-ValScope Constraint::map(const ValScope& source, std::vector<unsigned> components)
+const Constraint* math::Constraint::getAxisCollision1()
+/// Sphere collision
+{
+    static auto myConstraint = []() {
+        auto [t, x1, v1, expectedDist] = makeComponents<1, 1>();
+        auto dist = x1 - expectedDist;
+        auto dif = val::If{[](num v) { return v < -epsilon; }, dist, dist * dist, val::Zero{}};
+        return makeConstraint(dif);
+    }();
+    return &myConstraint;
+}
+//---------------------------------------------------------------------------
+ValScope Constraint::map(const ValScope& source, std::span<const unsigned> components, unsigned paramStart, unsigned paramCount)
 // Extract specific components from larger valscope
 {
     ValScope result;
@@ -55,6 +93,7 @@ ValScope Constraint::map(const ValScope& source, std::vector<unsigned> component
         result.xs[i] = source.xs[components[i]];
         result.vs[i] = source.vs[components[i]];
     }
+    result.ps = source.ps.slice(paramStart, paramCount);
     return result;
 }
 //---------------------------------------------------------------------------
@@ -63,8 +102,9 @@ TEST_CASE("math/Constraint") {
     ValScope vs;
     vs.xs = {0.0, 0.0, 0.0, 3.0, 0.0, 0.0};
     vs.vs = {0.0, 0.0, 0.0, 2.0, 0.0, 0.0};
+    vs.ps = {3.0};
     vs.t = 0.0;
-    auto cs = Constraint::getDistance(3.0);
+    auto cs = Constraint::getDistance2();
     REQUIRE(cs->computeC(vs) == Approx(0.0));
     REQUIRE(cs->computeC_dt(vs) == Approx(12.0));
 }
