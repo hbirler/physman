@@ -26,7 +26,10 @@ Vec Algorithm::solve(const Vec& b, tl::function_ref<Vec(const Vec& )> A)
     Vec d = r;
     auto rdotr = (r * r).sum();
 
-    while (rdotr >= (num{1} / 100000)) {
+    size_t iterations = 0;
+    size_t maxIterations = 100;
+    while (rdotr >= (num{1} / 100000) && iterations < maxIterations) {
+        iterations++;
         auto Ad = A(d);
         auto alpha = rdotr / (d * Ad).sum();
         x += alpha * d;

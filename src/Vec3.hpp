@@ -33,6 +33,13 @@ constexpr Vec3 operator/(num a, const Vec3& b) { return Vec3{a / b.x, a / b.y, a
 constexpr num Vec3::sqrlen() const { return ((*this) * (*this)).sum(); }
 constexpr num Vec3::len() const { return sqrt(sqrlen()); }
 constexpr Vec3 Vec3::normalized() const { return (*this) / this->len(); }
+constexpr Vec3 cross(const Vec3& a, const Vec3& b) {
+    return {
+        a.y * b.z - a.z * b.y,
+        a.z * b.x - a.x * b.z,
+        a.x * b.y - a.y * b.x
+    };
+}
 //---------------------------------------------------------------------------
 }
 //---------------------------------------------------------------------------

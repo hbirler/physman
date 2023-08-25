@@ -107,7 +107,7 @@ void Physics::step(num h) {
                 }
             }
         }
-        num ks = 500.0;
+        num ks = 1000.0;
         num kd = 10.0;
         auto b = -J_dt.dot(scope.vs) - J.dot(W * Q) - ks * C - kd * C_dt;
         auto lamb = Algorithm::solve(b, [&](const Vec& lamb) {

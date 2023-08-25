@@ -2,6 +2,7 @@
 #include "Vec3.hpp"
 #include "math/Physics.hpp"
 #include <raylib.h>
+#include <cmath>
 #include <fmt/format.h>
 #include <entt/entity/registry.hpp>
 //---------------------------------------------------------------------------
@@ -29,6 +30,7 @@ enum class ColliderType {
 struct Collider {
     ColliderType type = ColliderType::Sphere;
     num radius = 0.0;
+    Vec3 up = {0.0, 1.0, 0.0};
 };
 struct RenderSphere {
     Color color = {};
@@ -36,7 +38,8 @@ struct RenderSphere {
 };
 struct RenderPlane {
     Color color = {};
-    num w = 0.0, h = 0.0;
+    Vec3 top = {1.0, 0.0, 0.0};
+    Vec3 right = {0.0, 0.0, 1.0};
 };
 struct FixConstraint {
     Vec3 pos;
@@ -68,6 +71,9 @@ struct GameImpl : Game {
     int getScreenHeight() final { return 768; }
     string getTitle() final { return "physman"; }
 
+    num physicsTime = 0;
+    num physicsStep = 1.0 / 64;
+
     void updatePhysics(num deltaTime, num totalTime) {
         auto physView = registry.view<Position, Particle>();
         Vec xs, vs, ms;
@@ -83,7 +89,7 @@ struct GameImpl : Game {
         });
         size_t numComps = xs.size();
 
-        math::Physics phys(move(xs), move(vs), move(ms), totalTime - deltaTime);
+        math::Physics phys(move(xs), move(vs), move(ms), physicsTime);
 
         auto* constantForce = math::Force::getConstant();
         num gravitationalConstant = 9.81;
@@ -110,11 +116,12 @@ struct GameImpl : Game {
         auto handleCollide1 = [&](const Position& p1, const Collider& c1, const Particle& part1, const Position& p2, const Collider& c2) {
             assert(c1.type == ColliderType::Sphere);
             if (c2.type == ColliderType::Ground) {
-                if (p1.x.y - p2.x.y > c1.radius + epsilon)
+                if ((p1.x * c2.up).sum() > (c2.up * p2.x).sum() + c1.radius + epsilon)
                     return;
-                phys.addConstraint(math::Constraint::getAxisCollision1(), {part1.offset + 1}, {p2.x.y + c1.radius});
+                phys.addConstraint(math::Constraint::getPlaneCollision1(), {part1.offset, part1.offset + 1, part1.offset + 2}, {c2.up.x, c2.up.y, c2.up.z, (c2.up * p2.x).sum() + c1.radius});
             } else {
-                if ((p1.x - p2.x).sqrlen() > (c1.radius + c2.radius + epsilon))
+                auto dist = (c1.radius + c2.radius);
+                if ((p1.x - p2.x).sqrlen() > dist * dist + epsilon)
                     return;
                 phys.addConstraint(math::Constraint::getSphereCollision1(), {part1.offset, part1.offset + 1, part1.offset + 2}, {p2.x.x, p2.x.y, p2.x.z, c1.radius + c2.radius});
             }
@@ -122,7 +129,8 @@ struct GameImpl : Game {
         auto handleCollide2 = [&](const Position& p1, const Collider& c1, const Particle& part1, const Position& p2, const Collider& c2, const Particle& part2) {
             assert(c1.type == ColliderType::Sphere);
             assert(c2.type == ColliderType::Sphere);
-            if ((p1.x - p2.x).sqrlen() > (c1.radius + c2.radius + epsilon))
+            auto dist = (c1.radius + c2.radius);
+            if ((p1.x - p2.x).sqrlen() > dist * dist + epsilon)
                 return;
             phys.addConstraint(math::Constraint::getSphereCollision2(), {part1.offset, part1.offset + 1, part1.offset + 2, part2.offset, part2.offset + 1, part2.offset + 2}, {c1.radius + c2.radius});
         };
@@ -148,7 +156,8 @@ struct GameImpl : Game {
 
         size_t substeps = 1;
         for (size_t i = 0; i < substeps; i++)
-            phys.step(deltaTime / substeps);
+            phys.step(physicsStep / substeps);
+        physicsTime += physicsStep;
         physView.each([&](Position& pos, Particle& part) {
             pos.x = {phys.state[part.offset], phys.state[part.offset + 1], phys.state[part.offset + 2]};
             part.v = {phys.state[numComps + part.offset], phys.state[numComps + part.offset + 1], phys.state[numComps + part.offset + 2]};
@@ -165,7 +174,12 @@ struct GameImpl : Game {
             DrawSphereWires(position.x, sphere.radius, 16, 16, BLACK);
         });
         registry.view<const RenderPlane, const Position>().each([&](const RenderPlane& ground, const Position& position) {
-            DrawPlane(position.x, Vector2{ static_cast<float>(ground.w), static_cast<float>(ground.h) }, ground.color);
+            auto v1 = position.x - ground.top - ground.right;
+            auto v2 = position.x - ground.top + ground.right;
+            auto v3 = position.x + ground.top + ground.right;
+            auto v4 = position.x + ground.top - ground.right;
+            DrawTriangle3D(v1, v2, v3, ground.color);
+            DrawTriangle3D(v3, v4, v1, ground.color);
         });
         registry.view<const Position, const DistanceConstraint>().each([&](const Position& pos, const DistanceConstraint& dc) {
             auto& pos2 = registry.get<const Position>(dc.otherEntity);
@@ -176,16 +190,43 @@ struct GameImpl : Game {
     }
 
     void init() final {
-        camera.position = Vector3{5.0f, 2.0f, 2.0f};
-        camera.target = Vector3{0.0f, 0.0f, 0.0f};
+        camera.position = Vector3{2.5f, 2.0f, 2.0f};
+        camera.target = Vector3{0.0f, 1.0f, 0.0f};
         camera.up = Vector3{0.0f, 1.0f, 0.0f};
         camera.fovy = 60.0f;
         camera.projection = CAMERA_PERSPECTIVE;
 
-        auto ground = registry.create();
-        registry.emplace<Position>(ground, Position{{}});
-        registry.emplace<RenderPlane>(ground, RenderPlane{GRAY, 100.0f, 100.0f});
-        registry.emplace<Collider>(ground, Collider{ColliderType::Ground});
+        num boxwidth = 3.0f;
+        {
+            auto ground = registry.create();
+            registry.emplace<Position>(ground, Position{{}});
+            registry.emplace<RenderPlane>(ground, RenderPlane{GRAY, {100.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 100.0f}});
+            registry.emplace<Collider>(ground, Collider{ColliderType::Ground});
+        }
+        {
+            auto ground = registry.create();
+            registry.emplace<Position>(ground, Position{{-boxwidth, 0.0, 0.0}});
+            registry.emplace<RenderPlane>(ground, RenderPlane{GREEN, {0.0f, 100.0f, 0.0f}, {0.0f, 0.0f, -100.0f}});
+            registry.emplace<Collider>(ground, Collider{ColliderType::Ground, {}, {1.0, 0.0, 0.0}});
+        }
+        {
+            auto ground = registry.create();
+            registry.emplace<Position>(ground, Position{{+boxwidth, 0.0, 0.0}});
+            registry.emplace<RenderPlane>(ground, RenderPlane{LIME, {0.0f, 100.0f, 0.0f}, {0.0f, 0.0f, 100.0f}});
+            registry.emplace<Collider>(ground, Collider{ColliderType::Ground, {}, {-1.0, 0.0, 0.0}});
+        }
+        {
+            auto ground = registry.create();
+            registry.emplace<Position>(ground, Position{{0.0, 0.0, -boxwidth}});
+            registry.emplace<RenderPlane>(ground, RenderPlane{PURPLE, {100.0f, 0.0, 0.0f}, {0.0f, -100.0f, 0.0f}});
+            registry.emplace<Collider>(ground, Collider{ColliderType::Ground, {}, {0.0, 0.0, 1.0}});
+        }
+        {
+            auto ground = registry.create();
+            registry.emplace<Position>(ground, Position{{0.0, 0.0, +boxwidth}});
+            registry.emplace<RenderPlane>(ground, RenderPlane{DARKPURPLE, {100.0f, 0.0, 0.0f}, {0.0f, 100.0f, 0.0f}});
+            registry.emplace<Collider>(ground, Collider{ColliderType::Ground, {}, {0.0, 0.0, -1.0}});
+        }
 
         size_t numBalls = 3;
         num ballRadius = 0.2f;
@@ -238,12 +279,12 @@ struct GameImpl : Game {
             return;
 
         if (IsKeyDown(KEY_SPACE) && spaceup) {
-            num ballRadius = 0.1f;
+            num ballRadius = 0.3f;
             auto ball = registry.create();
             auto campos = Vec3{camera.position.x, camera.position.y, camera.position.z};
             auto camtar = Vec3{camera.target.x, camera.target.y, camera.target.z};
             registry.emplace<Position>(ball, Position{campos});
-            registry.emplace<RenderSphere>(ball, RenderSphere{DARKBLUE, ballRadius});
+            registry.emplace<RenderSphere>(ball, RenderSphere{VIOLET, ballRadius});
             registry.emplace<Particle>(ball, Particle{10.0, (camtar - campos).normalized() * 10.0f});
             registry.emplace<Gravity>(ball);
             registry.emplace<Collider>(ball, Collider{ColliderType::Sphere, ballRadius});

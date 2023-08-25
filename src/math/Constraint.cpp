@@ -70,13 +70,15 @@ const Constraint* math::Constraint::getSphereCollision2()
     return &myConstraint;
 }
 //---------------------------------------------------------------------------
-const Constraint* math::Constraint::getAxisCollision1()
+const Constraint* math::Constraint::getPlaneCollision1()
 /// Sphere collision
 {
     static auto myConstraint = []() {
-        auto [t, x1, v1, expectedDist] = makeComponents<1, 1>();
-        auto dist = x1 - expectedDist;
-        auto dif = val::If{[](num v) { return v < -epsilon; }, dist, dist * dist, val::Zero{}};
+        auto [t, x1, v1, ux, uy, uz, expectedDist] = makeVecComponents<1, 4>();
+        val::Vec3 up(ux, uy, uz);
+        // Up should already be normalized
+        auto dist = (up * x1).sum() - expectedDist;
+        auto dif = val::If{[](num v) { return v < -epsilon; }, dist, dist, val::Zero{}};
         return makeConstraint(dif);
     }();
     return &myConstraint;

@@ -39,7 +39,7 @@ class Constraint {
     /// Sphere collision
     static const Constraint* getSphereCollision2();
     /// Axis collision
-    static const Constraint* getAxisCollision1();
+    static const Constraint* getPlaneCollision1();
 
     template <unsigned Components, unsigned Params>
     static auto makeComponents() {
